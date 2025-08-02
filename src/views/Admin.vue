@@ -60,7 +60,7 @@ export default {
     // 🎬 Cartoons
     async fetchCartoons() {
       try {
-        const res = await fetch('http://https://blind-test-6c820b9c38e2.herokuapp.com/api/cartoons');
+        const res = await fetch('https://blind-test-6c820b9c38e2.herokuapp.com/api/cartoons');
         this.cartoons = await res.json();
       } catch (err) {
         console.error('Erreur chargement cartoons :', err);
@@ -68,7 +68,7 @@ export default {
     },
     async updateImage(cartoon) {
       try {
-        await fetch(`http://https://blind-test-6c820b9c38e2.herokuapp.com/api/cartoons/${encodeURIComponent(cartoon.name)}`, {
+        await fetch(`https://blind-test-6c820b9c38e2.herokuapp.com/api/cartoons/${encodeURIComponent(cartoon.name)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image_url: cartoon.image_url })
@@ -81,7 +81,7 @@ export default {
     // ❓ Questions
     async fetchQuestions() {
       try {
-        const res = await fetch('http://https://blind-test-6c820b9c38e2.herokuapp.com/api/questions');
+        const res = await fetch('https://blind-test-6c820b9c38e2.herokuapp.com/api/questions');
         this.questions = await res.json();
       } catch (err) {
         console.error('Erreur chargement questions :', err);
@@ -89,7 +89,7 @@ export default {
     },
     async deleteQuestion(id) {
       try {
-        await fetch(`http://https://blind-test-6c820b9c38e2.herokuapp.com/api/questions/${id}`, {
+        await fetch(`https://blind-test-6c820b9c38e2.herokuapp.com/api/questions/${id}`, {
           method: 'DELETE'
         });
         await this.fetchQuestions();
@@ -100,7 +100,7 @@ export default {
     async addQuestion() {
       const choices = this.choicesInput.split(',').map(c => c.trim());
       try {
-        await fetch('http://https://blind-test-6c820b9c38e2.herokuapp.com/api/questions', {
+        await fetch('https://blind-test-6c820b9c38e2.herokuapp.com/api/questions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

@@ -91,8 +91,8 @@ export default {
       this.loading = true;
       try {
         const [questionsRes, cartoonsRes] = await Promise.all([
-          fetch('http://https://blind-test-6c820b9c38e2.herokuapp.com/api/questions'),
-          fetch('http://https://blind-test-6c820b9c38e2.herokuapp.com/api/cartoons')
+          fetch('https://blind-test-6c820b9c38e2.herokuapp.com/api/questions'),
+          fetch('https://blind-test-6c820b9c38e2.herokuapp.com/api/cartoons')
         ]);
 
         this.questions = await questionsRes.json();
@@ -149,7 +149,7 @@ export default {
       }
 
       try {
-        await fetch('http://https://blind-test-6c820b9c38e2.herokuapp.com/api/scores', {
+        await fetch('https://blind-test-6c820b9c38e2.herokuapp.com/api/scores', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pseudo: this.pseudo, score: this.score })
