@@ -1,0 +1,165 @@
+/* QuizStyles.css */
+
+body {
+  margin: 0;
+  background: linear-gradient(-45deg, #ff9a9e, #fad0c4, #a1c4fd, #c2e9fb);
+  background-size: 400% 400%;
+  animation: gradientBG 15s ease infinite;
+  min-height: 100vh;
+}
+
+@keyframes gradientBG {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.app {
+  max-width: 800px;
+  margin: auto;
+  text-align: center;
+  font-family: 'Segoe UI', sans-serif;
+  padding: 2em;
+
+  /* Fond semi-transparent et flou */
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 16px;
+  box-shadow: 0 0 20px rgba(0,0,0,0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+h1 {
+  font-size: 2rem;
+  margin-bottom: 1em;
+}
+
+.intro-text {
+  font-size: 1.5em;
+  margin-bottom: 1em;
+  font-weight: bold;
+}
+
+button {
+  margin: 0.5em;
+  padding: 0.7em 1.2em;
+  font-size: 1em;
+  border: none;
+  border-radius: 8px;
+  background-color: #4e54c8;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+button:hover {
+  background-color: #8f94fb;
+}
+
+button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+audio {
+  margin: 1em 0;
+  width: 100%;
+}
+
+input {
+  padding: 0.5em;
+  font-size: 1em;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  margin-top: 1em;
+  width: 80%;
+}
+
+.correct {
+  background-color: #4CAF50 !important;
+  animation: pop 0.4s ease;
+}
+
+.wrong {
+  background-color: #f44336 !important;
+  animation: shake 0.4s ease;
+}
+
+@keyframes pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+@keyframes shake {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  50% { transform: translateX(5px); }
+  75% { transform: translateX(-5px); }
+  100% { transform: translateX(0); }
+}
+
+.feedback {
+  font-size: 1.2em;
+  font-weight: bold;
+  margin-top: 1em;
+}
+
+/* Snackbar notification stylée */
+.snackbar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #4CAF50;
+  color: white;
+  padding: 1em 2em;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  z-index: 1000;
+}
+
+/* Animation fade pour la snackbar */
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.5s;
+}
+.fade-enter, .fade-leave-to {
+  opacity: 0;
+}
+
+.choices {
+  display: flex;
+  justify-content: center;
+  gap: 1em;
+  flex-wrap: nowrap;
+}
+
+.choices p{
+  font-weight: bold;
+}
+
+
+.choice-block {
+  flex: 1; /* 👈 chaque bloc prend une part égale de l'espace */
+  max-width: 200px; /* 👈 limite pour éviter qu'elles deviennent trop larges sur grands écrans */
+  cursor: pointer;
+  border: 1px solid #ccc;
+  padding: 1em;
+  border-radius: 8px;
+  text-align: center;
+  transition: transform 0.2s;
+}
+
+.choice-block:hover {
+  transform: scale(1.05);
+  background-color: #f0f0ff;
+}
+
+.vignette {
+  width: 100%;
+  height: auto;
+  margin-bottom: 0.5em;
+  border-radius: 6px;
+  box-shadow: 0 0 5px rgba(0,0,0,0.1);
+}
+
