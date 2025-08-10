@@ -1,6 +1,6 @@
 # mon-projet-vue
 
-This template should help get you started developing with Vue 3 in Vite.
+Projet perso de blind test avec Vue.js
 
 ## Recommended IDE Setup
 
