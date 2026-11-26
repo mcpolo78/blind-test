@@ -354,7 +354,8 @@ export default {
   width: 100%;
   max-width: 120px;
   aspect-ratio: 1 / 1;
-  object-fit: cover;
+  object-fit: contain;
+  background: #fff;
   margin-bottom: 0.5em;
   border-radius: 6px;
   display: flex;
@@ -473,7 +474,9 @@ button:hover {
   height: 56px;
   flex: none;
   border-radius: 6px;
-  object-fit: cover;
+  object-fit: contain;
+  padding: 3px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
