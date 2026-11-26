@@ -1,5 +1,5 @@
 import { neon } from '@neondatabase/serverless'
-import { SEED_PLAYLISTS, SEED_TRACKS } from './seed.js'
+import { SEED_PLAYLISTS, SEED_TRACKS, SEED_VERSION } from './seed.js'
 
 const url = process.env.DATABASE_URL || process.env.POSTGRES_URL
 export const sql = url ? neon(url) : null
@@ -17,8 +17,7 @@ export async function ensureTables() {
   await sql`ALTER TABLE scores ADD COLUMN IF NOT EXISTS mode VARCHAR(60) NOT NULL DEFAULT 'all'`
   await sql`ALTER TABLE scores ALTER COLUMN mode TYPE VARCHAR(60)`
   await sql`ALTER TABLE scores ADD COLUMN IF NOT EXISTS correct INTEGER`
-  // Ancienne table des ajouts faits depuis l'admin : reprise dans tracks au
-  // premier démarrage, puis plus utilisée (gardée par précaution).
+  // Ancienne table des ajouts faits depuis l'admin, plus utilisée (gardée par précaution).
   await sql`CREATE TABLE IF NOT EXISTS custom_cartoons (
     id SERIAL PRIMARY KEY,
     name VARCHAR(80) NOT NULL UNIQUE,
@@ -49,40 +48,33 @@ export async function ensureTables() {
   ready = true
 }
 
-// Remplit playlists et tracks une seule fois (la ligne app_meta « seeded » sert de
-// verrou) : une playlist ou un son supprimé depuis l'admin ne revient jamais.
+// Remplit les playlists de départ ('80' et '2000') avec seed.js, une seule fois
+// par SEED_VERSION : la ligne app_meta « seed:<version> » sert de verrou. Un son
+// retiré depuis l'admin ne revient donc pas, sauf si SEED_VERSION change.
 async function seedOnce() {
-  const claimed = await sql`INSERT INTO app_meta (key, value) VALUES ('seeded', now()::text)
+  const key = `seed:${SEED_VERSION}`
+  const claimed = await sql`INSERT INTO app_meta (key, value) VALUES (${key}, now()::text)
     ON CONFLICT (key) DO NOTHING RETURNING key`
   if (claimed.length === 0) return
   try {
     await seed()
   } catch (e) {
-    // Échec en cours de route : on libère le verrou, le prochain appel reprendra
-    // (les insertions ignorent ce qui existe déjà).
-    await sql`DELETE FROM app_meta WHERE key = 'seeded'`
+    // Échec en cours de route : on libère le verrou, le prochain appel reprendra.
+    await sql`DELETE FROM app_meta WHERE key = ${key}`
     throw e
   }
 }
 
 async function seed() {
-  const ids = {}
   for (const [i, p] of SEED_PLAYLISTS.entries()) {
     const [row] = await sql`INSERT INTO playlists (slug, name, position) VALUES (${p.slug}, ${p.name}, ${i})
       ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id`
-    ids[p.slug] = row.id
-  }
-  const custom = await sql`SELECT name, deezer_id, era, image FROM custom_cartoons ORDER BY id`
-  const all = [
-    ...SEED_TRACKS,
-    ...custom.map((c) => ({ name: c.name, deezerId: Number(c.deezer_id), playlist: c.era, image: c.image })),
-  ]
-  for (const t of all) {
-    const playlistId = ids[t.playlist]
-    if (!playlistId) continue
-    await sql`INSERT INTO tracks (playlist_id, name, deezer_id, image, cover_album_id)
-      VALUES (${playlistId}, ${t.name}, ${t.deezerId}, ${t.image || null}, ${t.coverAlbumId || null})
-      ON CONFLICT (playlist_id, name) DO NOTHING`
+    await sql`DELETE FROM tracks WHERE playlist_id = ${row.id}`
+    for (const t of SEED_TRACKS.filter((x) => x.playlist === p.slug)) {
+      await sql`INSERT INTO tracks (playlist_id, name, deezer_id, image, cover_album_id)
+        VALUES (${row.id}, ${t.name}, ${t.deezerId}, ${t.image || null}, ${t.coverAlbumId || null})
+        ON CONFLICT (playlist_id, name) DO NOTHING`
+    }
   }
 }
 

@@ -4,7 +4,7 @@ Projet perso de blind test musical avec Vue.js : on choisit une playlist (dessin
 
 ## API (fonctions Vercel, dossier `api/`)
 
-Les playlists et leurs sons sont en base (Postgres Neon, tables `playlists` et `tracks`) et se gèrent depuis `/admin`. Au premier démarrage, la base est remplie une seule fois avec `api/_lib/seed.js` (les génériques de dessins animés d'origine) ; ce fichier n'a plus d'effet ensuite. Les extraits (30 s) et les pochettes viennent de l'API publique Deezer.
+Les playlists et leurs sons sont en base (Postgres Neon, tables `playlists` et `tracks`) et se gèrent depuis `/admin`. Les deux playlists de départ (20 génériques du Club Dorothée chacune) viennent de `api/_lib/seed.js` : elles sont remplies une seule fois par valeur de `SEED_VERSION`. Changer cette valeur remplace leur contenu au déploiement suivant ; les autres playlists ne sont jamais touchées. Les extraits (30 s) et les pochettes viennent de l'API publique Deezer.
 
 - `GET /api/playlists` : playlists jouables (4 sons minimum).
 - `GET /api/questions?playlist=<slug>|all&seed=N` : 10 questions (même graine = même partie, pour le mode défi).
