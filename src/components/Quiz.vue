@@ -20,7 +20,8 @@
         <div v-for="choice in JSON.parse(questions[currentIndex].choices)" :key="choice" class="choice-block"
           @click="handleAnswer(choice)">
           <!-- 🖼️ Vignette -->
-          <img :src="getCartoonImage(choice)" alt="vignette" class="vignette" />
+          <img v-if="getCartoonImage(choice)" :src="getCartoonImage(choice)" alt="" class="vignette" />
+          <div v-else class="vignette vignette-vide">🎬</div>
           <!-- 📝 Nom du cartoon -->
           <p>{{ choice }}</p>
         </div>
