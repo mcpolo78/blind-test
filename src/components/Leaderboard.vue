@@ -31,8 +31,9 @@ export default {
   },
   async mounted() {
     try {
-      const res = await fetch('https://blind-test-6c820b9c38e2.herokuapp.com/api/scores/top');
-      this.scores = await res.json();
+      const res = await fetch('/api/scores/top');
+      const data = await res.json();
+      this.scores = Array.isArray(data) ? data : [];
     } catch (error) {
       console.error('Erreur chargement scores :', error);
     }
