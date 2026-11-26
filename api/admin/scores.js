@@ -1,4 +1,4 @@
-import { sql, ensureTable, noDb } from '../_lib/db.js'
+import { sql, ensureTables, noDb } from '../_lib/db.js'
 import { checkAdmin } from '../_lib/admin.js'
 
 // GET /api/admin/scores : tous les scores (100 derniers)
@@ -7,7 +7,7 @@ import { checkAdmin } from '../_lib/admin.js'
 export default async function handler(req, res) {
   if (!checkAdmin(req, res)) return
   if (!sql) return noDb(res)
-  await ensureTable()
+  await ensureTables()
 
   if (req.method === 'GET') {
     const rows = await sql`SELECT id, pseudo, score, correct, mode, created_at FROM scores ORDER BY created_at DESC LIMIT 100`

@@ -172,7 +172,7 @@ input {
 }
 
 
-/* Tuile affichée quand un dessin animé n'a pas de vignette */
+/* Tuile affichée quand un son n'a pas de vignette */
 .vignette-vide {
   aspect-ratio: 1 / 1;
   display: flex;

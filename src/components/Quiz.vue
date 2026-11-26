@@ -1,6 +1,6 @@
 <template>
   <div class="app">
-    <h1>🎬 Blind Test Dessins Animés</h1>
+    <h1>🎵 Blind test</h1>
 
     <!-- Écran d’accueil -->
     <div v-if="!started">
@@ -9,9 +9,9 @@
         <span v-if="challenge.score !== null"> : <strong>{{ challenge.score }} pts</strong> à battre</span>
       </div>
 
-      <p class="intro-text">Es-tu prêt pour le quiz ?</p>
+      <p class="intro-text">{{ challenge ? 'Es-tu prêt ?' : 'Choisis ta playlist' }}</p>
 
-      <div v-if="!challenge" class="modes" role="radiogroup" aria-label="Époque">
+      <div v-if="!challenge" class="modes" role="radiogroup" aria-label="Playlist">
         <button
           v-for="m in modes"
           :key="m.id"
@@ -24,7 +24,7 @@
           {{ m.label }}
         </button>
       </div>
-      <p v-else class="hint">Mode : {{ modeLabel }}</p>
+      <p v-else class="hint">Playlist : {{ modeLabel }}</p>
 
       <p class="rules">⏱️ {{ QUESTION_TIME }} s par question. Bonne réponse : 100 pts, plus jusqu'à 100 pts de bonus si tu es rapide.</p>
 
@@ -59,7 +59,7 @@
           :disabled="answered"
           @click="handleAnswer(choice)"
         >
-          <img v-if="getCartoonImage(choice)" :src="getCartoonImage(choice)" alt="" class="vignette" />
+          <img v-if="imageOf(current, choice)" :src="imageOf(current, choice)" alt="" class="vignette" />
           <span v-else class="vignette vignette-vide">🎬</span>
           <span class="choice-name">{{ choice }}</span>
         </button>
@@ -70,7 +70,7 @@
 
     <!-- Fin du quiz -->
     <div v-else>
-      <h2>🎉 Quiz terminé !</h2>
+      <h2>🎉 Partie terminée !</h2>
       <p class="final-score">{{ score }} pts</p>
       <p>{{ correctCount }} bonne{{ correctCount > 1 ? 's' : '' }} réponse{{ correctCount > 1 ? 's' : '' }} sur {{ questions.length }}</p>
       <p v-if="challenge && challenge.score !== null" class="challenge-result">
@@ -91,7 +91,7 @@
         <h3>📝 Correction</h3>
         <ol>
           <li v-for="(q, i) in questions" :key="q.id" :class="results[i]?.correct ? 'ok' : 'ko'">
-            <img v-if="getCartoonImage(q.correct_answer)" :src="getCartoonImage(q.correct_answer)" alt="" />
+            <img v-if="imageOf(q, q.correct_answer)" :src="imageOf(q, q.correct_answer)" alt="" />
             <span v-else class="mini-vide">🎬</span>
             <div>
               <strong>{{ q.correct_answer }}</strong>
@@ -118,11 +118,7 @@ import '../assets/QuizStyles.css';
 import Leaderboard from './Leaderboard.vue';
 
 const QUESTION_TIME = 20;
-const MODES = [
-  { id: 'all', label: 'Toutes les époques' },
-  { id: '80', label: 'Années 70-80' },
-  { id: '2000', label: 'Années 90-2000' }
-];
+const ALL = { id: 'all', label: 'Tout mélanger' };
 
 function readStorage(key) {
   try {
@@ -144,7 +140,7 @@ export default {
   data() {
     return {
       QUESTION_TIME,
-      modes: MODES,
+      modes: [ALL],
       mode: 'all',
       seed: null,
       challenge: null,
@@ -152,7 +148,6 @@ export default {
       loading: false,
       error: '',
       questions: [],
-      cartoons: [],
       currentIndex: 0,
       results: [],
       answered: false,
@@ -180,7 +175,7 @@ export default {
       return this.results.filter((r) => r && r.correct).length;
     },
     modeLabel() {
-      return (MODES.find((m) => m.id === this.mode) || MODES[0]).label;
+      return (this.modes.find((m) => m.id === this.mode) || ALL).label;
     }
   },
   mounted() {
@@ -194,25 +189,39 @@ export default {
         by: (p.get('par') || '').slice(0, 30),
         score: Number.isFinite(score) ? score : null
       };
-      if (MODES.some((m) => m.id === p.get('mode'))) this.mode = p.get('mode');
+      const mode = p.get('mode');
+      if (mode && /^[a-z0-9-]{1,60}$/.test(mode)) this.mode = mode;
     }
+    this.loadPlaylists();
   },
   beforeUnmount() {
     this.stopTimer();
   },
   methods: {
+    async loadPlaylists() {
+      try {
+        const res = await fetch('/api/playlists');
+        if (!res.ok) return;
+        const list = await res.json();
+        this.modes = [ALL, ...list.map((p) => ({ id: p.slug, label: p.name }))];
+        if (!this.challenge && !this.modes.some((m) => m.id === this.mode)) this.mode = 'all';
+      } catch {
+        /* on garde « Tout mélanger » */
+      }
+    },
     async startQuiz() {
       this.loading = true;
       this.error = '';
       this.seed = this.challenge ? this.challenge.seed : Math.floor(Math.random() * 1e9);
       try {
-        const [questionsRes, cartoonsRes] = await Promise.all([
-          fetch(`/api/questions?mode=${this.mode}&seed=${this.seed}`),
-          fetch('/api/cartoons')
-        ]);
-        if (!questionsRes.ok || !cartoonsRes.ok) throw new Error('API indisponible');
-        this.questions = await questionsRes.json();
-        this.cartoons = await cartoonsRes.json();
+        const res = await fetch(
+          `/api/questions?playlist=${encodeURIComponent(this.mode)}&seed=${this.seed}`
+        );
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || 'API indisponible');
+        }
+        this.questions = await res.json();
         this.results = [];
         this.score = 0;
         this.currentIndex = 0;
@@ -223,7 +232,7 @@ export default {
         this.startQuestion();
       } catch (e) {
         console.error('Erreur chargement quiz :', e);
-        this.error = '❌ Impossible de charger le quiz, réessaie dans un instant.';
+        this.error = '❌ Impossible de charger la partie, réessaie dans un instant.';
       } finally {
         this.loading = false;
       }
@@ -244,9 +253,8 @@ export default {
       if (this.timerId) clearInterval(this.timerId);
       this.timerId = null;
     },
-    getCartoonImage(name) {
-      const cartoon = this.cartoons.find((c) => c.name === name);
-      return cartoon ? cartoon.image_url : '';
+    imageOf(question, name) {
+      return (question && question.images && question.images[name]) || '';
     },
     choiceClass(choice) {
       if (!this.answered) return '';
