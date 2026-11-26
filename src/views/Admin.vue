@@ -2,120 +2,96 @@
   <div class="admin">
     <h1>🛠️ Panneau d'administration</h1>
 
-    <!-- 🎬 Section Cartoons -->
-    <section>
-      <h2>🎬 Vignettes des dessins animés</h2>
-      <div v-if="cartoons.length === 0">⏳ Chargement...</div>
-      <div v-for="cartoon in cartoons" :key="cartoon.name" class="block">
-        <h3>{{ cartoon.name }}</h3>
-        <img :src="cartoon.image_url" alt="vignette" class="vignette" />
-        <input v-model="cartoon.image_url" placeholder="URL de l’image" />
-        <button @click="updateImage(cartoon)">💾 Enregistrer</button>
-      </div>
-    </section>
+    <!-- 🔒 Connexion -->
+    <form v-if="!authed" @submit.prevent="login" class="form">
+      <input v-model="password" type="password" placeholder="Mot de passe admin" required />
+      <button type="submit">🔓 Entrer</button>
+      <p v-if="error" class="error">{{ error }}</p>
+    </form>
 
-    <hr />
-
-    <!-- ❓ Section Questions -->
-    <section>
-      <h2>❓ Gestion des Questions</h2>
-      <form @submit.prevent="addQuestion" class="form">
-        <input v-model="newQuestion.audio_url" placeholder="URL audio" required />
-        <input v-model="newQuestion.correct_answer" placeholder="Bonne réponse" required />
-        <input v-model="choicesInput" placeholder="Choix séparés par des virgules" required />
-        <button type="submit">➕ Ajouter</button>
-      </form>
-
-      <div v-if="questions.length === 0">⏳ Chargement des questions...</div>
-      <div v-else>
-        <div v-for="q in questions" :key="q.id" class="question">
-          <strong>{{ q.correct_answer }}</strong>
-          <audio :src="q.audio_url" controls></audio>
-          <p>Choix : {{ JSON.parse(q.choices).join(', ') }}</p>
-          <button @click="deleteQuestion(q.id)">🗑️ Supprimer</button>
+    <template v-else>
+      <!-- 🏆 Scores -->
+      <section>
+        <h2>🏆 Scores</h2>
+        <div v-if="scores.length === 0">Aucun score pour l'instant.</div>
+        <div v-for="s in scores" :key="s.id" class="question">
+          <strong>{{ s.pseudo }}</strong> : {{ s.score }}
+          <small>({{ new Date(s.created_at).toLocaleString('fr-FR') }})</small>
+          <button @click="deleteScore(s.id)">🗑️ Supprimer</button>
         </div>
-      </div>
-    </section>
+      </section>
+
+      <hr />
+
+      <!-- 🎬 Dessins animés -->
+      <section>
+        <h2>🎬 Dessins animés du quiz</h2>
+        <p class="hint">La liste se modifie dans <code>api/_lib/cartoons.js</code> (identifiants Deezer).</p>
+        <div class="grid">
+          <div v-for="cartoon in cartoons" :key="cartoon.name" class="block">
+            <img :src="cartoon.image_url" alt="" class="vignette" />
+            <p>{{ cartoon.name }}</p>
+          </div>
+        </div>
+      </section>
+    </template>
   </div>
 </template>
 
 <script>
+const KEY = 'blindtest-admin'
+
 export default {
   data() {
     return {
-      cartoons: [],
-      questions: [],
-      newQuestion: {
-        audio_url: '',
-        correct_answer: ''
-      },
-      choicesInput: ''
+      authed: false,
+      password: '',
+      error: '',
+      scores: [],
+      cartoons: []
     };
   },
   async mounted() {
-    await this.fetchCartoons();
-    await this.fetchQuestions();
+    try {
+      const saved = sessionStorage.getItem(KEY);
+      if (saved) {
+        this.password = saved;
+        await this.login();
+      }
+    } catch {
+      /* sessionStorage indisponible */
+    }
   },
   methods: {
-    // 🎬 Cartoons
-    async fetchCartoons() {
-      try {
-        const res = await fetch('https://blind-test-6c820b9c38e2.herokuapp.com/api/cartoons');
-        this.cartoons = await res.json();
-      } catch (err) {
-        console.error('Erreur chargement cartoons :', err);
-      }
+    headers() {
+      return { 'x-admin-password': this.password };
     },
-    async updateImage(cartoon) {
-      try {
-        await fetch(`https://blind-test-6c820b9c38e2.herokuapp.com/api/cartoons/${encodeURIComponent(cartoon.name)}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image_url: cartoon.image_url })
-        });
-      } catch (err) {
-        console.error('Erreur mise à jour image :', err);
+    async login() {
+      this.error = '';
+      const res = await fetch('/api/admin/scores', { headers: this.headers() });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        this.error = body.error || 'Erreur ' + res.status;
+        this.authed = false;
+        return;
       }
+      this.scores = await res.json();
+      this.authed = true;
+      try {
+        sessionStorage.setItem(KEY, this.password);
+      } catch {
+        /* ignore */
+      }
+      const c = await fetch('/api/cartoons');
+      if (c.ok) this.cartoons = await c.json();
     },
-
-    // ❓ Questions
-    async fetchQuestions() {
-      try {
-        const res = await fetch('https://blind-test-6c820b9c38e2.herokuapp.com/api/questions');
-        this.questions = await res.json();
-      } catch (err) {
-        console.error('Erreur chargement questions :', err);
-      }
+    async fetchScores() {
+      const res = await fetch('/api/admin/scores', { headers: this.headers() });
+      if (res.ok) this.scores = await res.json();
     },
-    async deleteQuestion(id) {
-      try {
-        await fetch(`https://blind-test-6c820b9c38e2.herokuapp.com/api/questions/${id}`, {
-          method: 'DELETE'
-        });
-        await this.fetchQuestions();
-      } catch (err) {
-        console.error('Erreur suppression :', err);
-      }
-    },
-    async addQuestion() {
-      const choices = this.choicesInput.split(',').map(c => c.trim());
-      try {
-        await fetch('https://blind-test-6c820b9c38e2.herokuapp.com/api/questions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            audio_url: this.newQuestion.audio_url,
-            correct_answer: this.newQuestion.correct_answer,
-            choices
-          })
-        });
-        this.newQuestion.audio_url = '';
-        this.newQuestion.correct_answer = '';
-        this.choicesInput = '';
-        await this.fetchQuestions();
-      } catch (err) {
-        console.error('Erreur ajout question :', err);
-      }
+    async deleteScore(id) {
+      await fetch(`/api/admin/scores?id=${id}`, { method: 'DELETE', headers: this.headers() });
+      await this.fetchScores();
     }
   }
 };
@@ -132,6 +108,17 @@ export default {
   margin-bottom: 1em;
   border-radius: 8px;
 }
+.question {
+  display: flex;
+  gap: 1em;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 1em;
+}
 .vignette {
   width: 120px;
   height: auto;
@@ -142,6 +129,12 @@ export default {
   margin: 0.5em;
   padding: 0.5em;
   width: calc(100% - 1em);
+}
+.error {
+  color: #c0392b;
+}
+.hint {
+  color: #666;
 }
 button {
   padding: 0.5em 1em;

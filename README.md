@@ -2,6 +2,15 @@
 
 Projet perso de blind test avec Vue.js
 
+## API (fonctions Vercel, dossier `api/`)
+
+- `GET /api/questions` : 10 questions tirées au hasard dans `api/_lib/cartoons.js`. Les extraits (30 s) et les vignettes viennent de l'API publique Deezer.
+- `GET /api/cartoons` : nom + vignette de chaque dessin animé.
+- `POST /api/scores` et `GET /api/scores/top` : scores stockés dans Postgres (Neon).
+- `GET|DELETE /api/admin/scores` : gestion des scores, page `/admin`, protégée par mot de passe.
+
+Variables d'environnement Vercel : `DATABASE_URL` (ajoutée par l'intégration Neon) et `ADMIN_PASSWORD`.
+
 ## Recommended IDE Setup
 
 [VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
