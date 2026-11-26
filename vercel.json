@@ -1,3 +1,13 @@
 {
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
+  "rewrites": [{ "source": "/((?!api/|_vercel/).*)", "destination": "/index.html" }],
+  "images": {
+    "sizes": [128, 256],
+    "formats": ["image/avif", "image/webp"],
+    "minimumCacheTTL": 86400,
+    "remotePatterns": [
+      { "protocol": "https", "hostname": "upload.wikimedia.org" },
+      { "protocol": "https", "hostname": "cdn-images.dzcdn.net" },
+      { "protocol": "https", "hostname": "e-cdns-images.dzcdn.net" }
+    ]
+  }
 }
