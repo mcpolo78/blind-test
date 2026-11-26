@@ -7,7 +7,18 @@
     "remotePatterns": [
       { "protocol": "https", "hostname": "upload.wikimedia.org" },
       { "protocol": "https", "hostname": "cdn-images.dzcdn.net" },
-      { "protocol": "https", "hostname": "e-cdns-images.dzcdn.net" }
+      { "protocol": "https", "hostname": "e-cdns-images.dzcdn.net" },
+      { "protocol": "https", "hostname": "image.animationdigitalnetwork.fr" },
+      { "protocol": "https", "hostname": "photos.abweb.com" },
+      { "protocol": "https", "hostname": "tv-programme.com" },
+      { "protocol": "https", "hostname": "image.tmdb.org" },
+      { "protocol": "https", "hostname": "photos.tf1.fr" },
+      { "protocol": "https", "hostname": "artworks.thetvdb.com" },
+      { "protocol": "https", "hostname": "www.alf.fr" },
+      { "protocol": "https", "hostname": "images.justwatch.com" },
+      { "protocol": "https", "hostname": "media.ngroup.be" },
+      { "protocol": "https", "hostname": "m.media-amazon.com" },
+      { "protocol": "https", "hostname": "media.senscritique.com" }
     ]
   }
 }

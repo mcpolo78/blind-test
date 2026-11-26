@@ -1,5 +1,6 @@
 import { SEED_PLAYLISTS, SEED_TRACKS } from './seed.js'
 import { sql, ensureTables } from './db.js'
+import { defaultImage } from './track-images.js'
 
 // Cache mémoire par titre (Fluid Compute réutilise les instances).
 // Les liens d'extraits Deezer expirent : on les rafraîchit toutes les 30 min.
@@ -14,32 +15,34 @@ async function deezer(path) {
 // Ajoute l'extrait audio et la vignette à un morceau de la base.
 // Renvoie null si Deezer n'a plus d'extrait pour ce titre.
 export async function resolve(track) {
-  const key = `${track.deezerId}:${track.coverAlbumId || ''}:${track.image || ''}`
+  const effectiveTrack = { ...track, image: defaultImage(track) }
+  const key = `${track.deezerId}:${track.coverAlbumId || ''}:${effectiveTrack.image || ''}`
   const hit = trackCache.get(key)
-  if (hit && Date.now() - hit.at < TTL_MS) return { ...track, ...hit.value }
+  if (hit && Date.now() - hit.at < TTL_MS) return { ...effectiveTrack, ...hit.value }
   try {
     const t = await deezer(`track/${track.deezerId}`)
     if (!t || t.error || !t.preview) return null
     let image_url = t.album?.cover_medium || ''
-    if (track.image) image_url = track.image
+    if (effectiveTrack.image) image_url = effectiveTrack.image
     else if (track.coverAlbumId) {
       const a = await deezer(`album/${track.coverAlbumId}`)
       if (a?.cover_medium) image_url = a.cover_medium
     }
     const value = { audio_url: t.preview, image_url }
     trackCache.set(key, { at: Date.now(), value })
-    return { ...track, ...value }
+    return { ...effectiveTrack, ...value }
   } catch {
     return null
   }
 }
 
 function fromRow(r) {
+  const image = defaultImage({ name: r.name, deezerId: r.deezer_id, image: r.image })
   return {
     id: r.id,
     name: r.name,
     deezerId: Number(r.deezer_id),
-    image: r.image || null,
+    image,
     coverAlbumId: r.cover_album_id ? Number(r.cover_album_id) : null,
     playlist: r.slug,
   }

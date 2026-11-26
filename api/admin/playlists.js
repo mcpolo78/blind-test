@@ -2,6 +2,7 @@ import { sql, ensureTables, noDb, readBody } from '../_lib/db.js'
 import { checkAdmin } from '../_lib/admin.js'
 import { getPlaylists, resolve } from '../_lib/deezer.js'
 import { optimized } from '../_lib/images.js'
+import { defaultImage } from '../_lib/track-images.js'
 
 // GET    /api/admin/playlists          : playlists et nombre de sons
 // GET    /api/admin/playlists?id=3     : sons d'une playlist (avec extrait et vignette)
@@ -26,7 +27,7 @@ export default async function handler(req, res) {
           id: r.id,
           name: r.name,
           deezerId: Number(r.deezer_id),
-          image: r.image || null,
+          image: defaultImage({ name: r.name, deezerId: r.deezer_id, image: r.image }),
           coverAlbumId: r.cover_album_id ? Number(r.cover_album_id) : null,
         }
         const full = await resolve(base)
