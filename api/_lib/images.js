@@ -15,6 +15,7 @@ const OPTIMIZED_HOSTS = [
   'media.ngroup.be',
   'm.media-amazon.com',
   'media.senscritique.com',
+  'fr.web.img5.acsta.net',
 ]
 
 export function optimized(url) {

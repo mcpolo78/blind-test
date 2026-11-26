@@ -18,7 +18,8 @@
       { "protocol": "https", "hostname": "images.justwatch.com" },
       { "protocol": "https", "hostname": "media.ngroup.be" },
       { "protocol": "https", "hostname": "m.media-amazon.com" },
-      { "protocol": "https", "hostname": "media.senscritique.com" }
+      { "protocol": "https", "hostname": "media.senscritique.com" },
+      { "protocol": "https", "hostname": "fr.web.img5.acsta.net" }
     ]
   }
 }
