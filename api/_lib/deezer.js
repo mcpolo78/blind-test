@@ -10,11 +10,13 @@ async function fetchTrack(cartoon) {
     const res = await fetch(`https://api.deezer.com/track/${cartoon.deezerId}`)
     const t = await res.json()
     if (!t || t.error || !t.preview) return null
-    return {
-      name: cartoon.name,
-      audio_url: t.preview,
-      image_url: t.album?.cover_medium || '',
+    let image_url = t.album?.cover_medium || ''
+    if (cartoon.image === null) image_url = ''
+    else if (cartoon.coverAlbumId) {
+      const a = await fetch(`https://api.deezer.com/album/${cartoon.coverAlbumId}`).then((r) => r.json())
+      if (a?.cover_medium) image_url = a.cover_medium
     }
+    return { name: cartoon.name, audio_url: t.preview, image_url }
   } catch {
     return null
   }
