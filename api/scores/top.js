@@ -12,9 +12,10 @@ export default async function handler(req, res) {
       : period === 'week'
         ? new Date(Date.now() - 7 * 24 * 3600 * 1000)
         : new Date(0)
-  const rows = await sql`SELECT pseudo, score, correct, mode FROM scores
-    WHERE created_at >= ${since.toISOString()}
-    ORDER BY score DESC, created_at ASC LIMIT 10`
+  const rows = await sql`SELECT s.pseudo, s.score, s.correct, s.mode, p.name AS playlist
+    FROM scores s LEFT JOIN playlists p ON p.slug = s.mode
+    WHERE s.created_at >= ${since.toISOString()}
+    ORDER BY s.score DESC, s.created_at ASC LIMIT 10`
   res.setHeader('Cache-Control', 'no-store')
   return res.status(200).json(rows)
 }

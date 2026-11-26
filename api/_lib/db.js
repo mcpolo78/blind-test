@@ -1,4 +1,5 @@
 import { neon } from '@neondatabase/serverless'
+import { SEED_PLAYLISTS, SEED_TRACKS } from './seed.js'
 
 const url = process.env.DATABASE_URL || process.env.POSTGRES_URL
 export const sql = url ? neon(url) : null
@@ -13,8 +14,11 @@ export async function ensureTables() {
     score INTEGER NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )`
-  await sql`ALTER TABLE scores ADD COLUMN IF NOT EXISTS mode VARCHAR(10) NOT NULL DEFAULT 'all'`
+  await sql`ALTER TABLE scores ADD COLUMN IF NOT EXISTS mode VARCHAR(60) NOT NULL DEFAULT 'all'`
+  await sql`ALTER TABLE scores ALTER COLUMN mode TYPE VARCHAR(60)`
   await sql`ALTER TABLE scores ADD COLUMN IF NOT EXISTS correct INTEGER`
+  // Ancienne table des ajouts faits depuis l'admin : reprise dans tracks au
+  // premier démarrage, puis plus utilisée (gardée par précaution).
   await sql`CREATE TABLE IF NOT EXISTS custom_cartoons (
     id SERIAL PRIMARY KEY,
     name VARCHAR(80) NOT NULL UNIQUE,
@@ -23,11 +27,76 @@ export async function ensureTables() {
     image TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )`
+  await sql`CREATE TABLE IF NOT EXISTS playlists (
+    id SERIAL PRIMARY KEY,
+    slug VARCHAR(60) NOT NULL UNIQUE,
+    name VARCHAR(80) NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`
+  await sql`CREATE TABLE IF NOT EXISTS tracks (
+    id SERIAL PRIMARY KEY,
+    playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+    name VARCHAR(80) NOT NULL,
+    deezer_id BIGINT NOT NULL,
+    image TEXT,
+    cover_album_id BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (playlist_id, name)
+  )`
+  await sql`CREATE TABLE IF NOT EXISTS app_meta (key VARCHAR(40) PRIMARY KEY, value TEXT)`
+  await seedOnce()
   ready = true
 }
-// Ancien nom, gardé pour les routes existantes.
-export const ensureTable = ensureTables
+
+// Remplit playlists et tracks une seule fois (la ligne app_meta « seeded » sert de
+// verrou) : une playlist ou un son supprimé depuis l'admin ne revient jamais.
+async function seedOnce() {
+  const claimed = await sql`INSERT INTO app_meta (key, value) VALUES ('seeded', now()::text)
+    ON CONFLICT (key) DO NOTHING RETURNING key`
+  if (claimed.length === 0) return
+  try {
+    await seed()
+  } catch (e) {
+    // Échec en cours de route : on libère le verrou, le prochain appel reprendra
+    // (les insertions ignorent ce qui existe déjà).
+    await sql`DELETE FROM app_meta WHERE key = 'seeded'`
+    throw e
+  }
+}
+
+async function seed() {
+  const ids = {}
+  for (const [i, p] of SEED_PLAYLISTS.entries()) {
+    const [row] = await sql`INSERT INTO playlists (slug, name, position) VALUES (${p.slug}, ${p.name}, ${i})
+      ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id`
+    ids[p.slug] = row.id
+  }
+  const custom = await sql`SELECT name, deezer_id, era, image FROM custom_cartoons ORDER BY id`
+  const all = [
+    ...SEED_TRACKS,
+    ...custom.map((c) => ({ name: c.name, deezerId: Number(c.deezer_id), playlist: c.era, image: c.image })),
+  ]
+  for (const t of all) {
+    const playlistId = ids[t.playlist]
+    if (!playlistId) continue
+    await sql`INSERT INTO tracks (playlist_id, name, deezer_id, image, cover_album_id)
+      VALUES (${playlistId}, ${t.name}, ${t.deezerId}, ${t.image || null}, ${t.coverAlbumId || null})
+      ON CONFLICT (playlist_id, name) DO NOTHING`
+  }
+}
 
 export function noDb(res) {
-  return res.status(503).json({ error: 'Base de scores non configurée (DATABASE_URL manquant).' })
+  return res.status(503).json({ error: 'Base non configurée (DATABASE_URL manquant).' })
+}
+
+export function readBody(req) {
+  if (typeof req.body === 'string') {
+    try {
+      return JSON.parse(req.body || '{}')
+    } catch {
+      return {}
+    }
+  }
+  return req.body || {}
 }

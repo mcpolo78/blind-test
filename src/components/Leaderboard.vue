@@ -28,7 +28,10 @@
       <tbody>
         <tr v-for="(entry, index) in scores" :key="entry.pseudo + index">
           <td>{{ medal(index) }}</td>
-          <td>{{ entry.pseudo }}</td>
+          <td>
+            {{ entry.pseudo }}
+            <small v-if="entry.playlist" class="playlist">{{ entry.playlist }}</small>
+          </td>
           <td>{{ entry.score }} pts</td>
         </tr>
       </tbody>
@@ -88,6 +91,11 @@ export default {
 </script>
 
 <style scoped>
+.playlist {
+  display: block;
+  font-size: 0.75em;
+  opacity: 0.7;
+}
 .leaderboard {
   max-width: 500px;
   margin: 2em auto 0;

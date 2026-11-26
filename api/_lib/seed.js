@@ -1,15 +1,18 @@
-// Liste de base des dessins animés du blind test (d'autres peuvent être
-// ajoutés depuis /admin, ils sont alors stockés en base).
-// deezerId : identifiant du titre sur Deezer. L'extrait audio (30 s officielles)
-// est récupéré à la volée via l'API publique Deezer, car les liens d'extraits
-// expirent au bout de quelques heures.
-// era : '80' (années 70-80) ou '2000' (années 90-2000), pour le mode par époque.
-// Vignette, par ordre de priorité :
-//   image : URL d'image fixe (ou null pour afficher une tuile 🎬) ;
-//   coverAlbumId : album Deezer dont la pochette sert de vignette, quand l'album
-//   du titre est une compilation ;
-//   sinon la pochette de l'album du titre.
-export const cartoons = [
+// Données de départ, copiées UNE SEULE FOIS en base au premier démarrage
+// (tables playlists et tracks, voir db.js). Ensuite tout se gère depuis /admin :
+// modifier ce fichier n'a plus d'effet sur une base déjà remplie.
+// deezerId : identifiant du titre sur Deezer. L'extrait (30 s) est récupéré à la
+// volée via l'API publique Deezer, car les liens d'extraits expirent.
+// Vignette : image (URL fixe), sinon pochette de coverAlbumId, sinon pochette
+// de l'album du titre.
+// Les slugs '80' et '2000' reprennent les anciens modes « époque », pour que
+// les scores et les liens de défi existants restent valables.
+export const SEED_PLAYLISTS = [
+  { slug: '80', name: 'Dessins animés 70-80' },
+  { slug: '2000', name: 'Dessins animés 90-2000' },
+]
+
+const cartoons = [
   { name: 'Pokémon', deezerId: 84793863, era: '2000', coverAlbumId: 803245181 },
   {
     name: 'Dragon Ball',
@@ -51,4 +54,5 @@ export const cartoons = [
   { name: 'Wakfu', deezerId: 1878987867, era: '2000' },
 ]
 
-export const ERAS = ['80', '2000']
+
+export const SEED_TRACKS = cartoons.map(({ era, ...t }) => ({ ...t, playlist: era }))

@@ -1,4 +1,4 @@
-import { cartoons as baseCartoons } from './cartoons.js'
+import { SEED_PLAYLISTS, SEED_TRACKS } from './seed.js'
 import { sql, ensureTables } from './db.js'
 
 // Cache mémoire par titre (Fluid Compute réutilise les instances).
@@ -11,52 +11,66 @@ async function deezer(path) {
   return res.json()
 }
 
-async function resolve(cartoon) {
-  const key = `${cartoon.deezerId}:${cartoon.coverAlbumId || ''}:${cartoon.image ?? ''}`
+// Ajoute l'extrait audio et la vignette à un morceau de la base.
+// Renvoie null si Deezer n'a plus d'extrait pour ce titre.
+export async function resolve(track) {
+  const key = `${track.deezerId}:${track.coverAlbumId || ''}:${track.image || ''}`
   const hit = trackCache.get(key)
-  if (hit && Date.now() - hit.at < TTL_MS) return { ...hit.value, name: cartoon.name, era: cartoon.era }
+  if (hit && Date.now() - hit.at < TTL_MS) return { ...track, ...hit.value }
   try {
-    const t = await deezer(`track/${cartoon.deezerId}`)
+    const t = await deezer(`track/${track.deezerId}`)
     if (!t || t.error || !t.preview) return null
     let image_url = t.album?.cover_medium || ''
-    if (cartoon.image === null) image_url = ''
-    else if (cartoon.image) image_url = cartoon.image
-    else if (cartoon.coverAlbumId) {
-      const a = await deezer(`album/${cartoon.coverAlbumId}`)
+    if (track.image) image_url = track.image
+    else if (track.coverAlbumId) {
+      const a = await deezer(`album/${track.coverAlbumId}`)
       if (a?.cover_medium) image_url = a.cover_medium
     }
     const value = { audio_url: t.preview, image_url }
     trackCache.set(key, { at: Date.now(), value })
-    return { ...value, name: cartoon.name, era: cartoon.era }
+    return { ...track, ...value }
   } catch {
     return null
   }
 }
 
-// Liste de base + dessins animés ajoutés depuis l'admin.
-export async function getCatalog() {
-  let custom = []
-  if (sql) {
-    try {
-      await ensureTables()
-      const rows = await sql`SELECT name, deezer_id, era, image FROM custom_cartoons ORDER BY id`
-      custom = rows.map((r) => ({
-        name: r.name,
-        deezerId: Number(r.deezer_id),
-        era: r.era,
-        ...(r.image ? { image: r.image } : {}),
-      }))
-    } catch {
-      /* base indisponible : on garde la liste de base */
-    }
+function fromRow(r) {
+  return {
+    id: r.id,
+    name: r.name,
+    deezerId: Number(r.deezer_id),
+    image: r.image || null,
+    coverAlbumId: r.cover_album_id ? Number(r.cover_album_id) : null,
+    playlist: r.slug,
   }
-  const names = new Set(baseCartoons.map((c) => c.name))
-  return [...baseCartoons, ...custom.filter((c) => !names.has(c.name))]
 }
 
-export async function getTracks() {
-  const catalog = await getCatalog()
-  return (await Promise.all(catalog.map(resolve))).filter(Boolean)
+// Playlists avec leur nombre de morceaux. Sans base (dev local) : données de départ.
+export async function getPlaylists() {
+  if (!sql) {
+    return SEED_PLAYLISTS.map((p) => ({ ...p, count: SEED_TRACKS.filter((t) => t.playlist === p.slug).length }))
+  }
+  await ensureTables()
+  const rows = await sql`SELECT p.id, p.slug, p.name, COUNT(t.id)::int AS count
+    FROM playlists p LEFT JOIN tracks t ON t.playlist_id = p.id
+    GROUP BY p.id ORDER BY p.position, p.id`
+  return rows
+}
+
+// Morceaux d'une playlist (slug), ou de toutes si slug est vide.
+export async function getTrackRows(slug) {
+  if (!sql) return SEED_TRACKS.filter((t) => !slug || t.playlist === slug)
+  await ensureTables()
+  const rows = slug
+    ? await sql`SELECT t.*, p.slug FROM tracks t JOIN playlists p ON p.id = t.playlist_id
+        WHERE p.slug = ${slug} ORDER BY t.name`
+    : await sql`SELECT t.*, p.slug FROM tracks t JOIN playlists p ON p.id = t.playlist_id ORDER BY t.name`
+  return rows.map(fromRow)
+}
+
+export async function getTracks(slug) {
+  const rows = await getTrackRows(slug)
+  return (await Promise.all(rows.map(resolve))).filter(Boolean)
 }
 
 export async function searchTracks(q) {

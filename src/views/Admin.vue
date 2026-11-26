@@ -1,6 +1,6 @@
 <template>
   <div class="admin">
-    <h1>🛠️ Panneau d'administration</h1>
+    <h1>🛠️ Admin du blind test</h1>
 
     <!-- 🔒 Connexion -->
     <form v-if="!authed" @submit.prevent="login" class="form">
@@ -10,20 +10,48 @@
     </form>
 
     <template v-else>
-      <!-- ➕ Ajouter un générique -->
+      <p v-if="message" class="hint flash" aria-live="polite">{{ message }}</p>
+
+      <!-- 📚 Playlists -->
       <section>
-        <h2>➕ Ajouter un générique</h2>
+        <h2>📚 Playlists</h2>
+        <div v-for="(p, i) in playlists" :key="p.id" :class="['question', { selected: current && current.id === p.id }]">
+          <template v-if="renaming === p.id">
+            <input v-model="renameDraft" maxlength="80" class="grow" @keyup.enter="renamePlaylist(p)" />
+            <button @click="renamePlaylist(p)">💾</button>
+            <button class="ghost" @click="renaming = null">Annuler</button>
+          </template>
+          <template v-else>
+            <button class="link grow" @click="openPlaylist(p)">
+              <strong>{{ p.name }}</strong>
+              <small> · {{ p.count }} son{{ p.count > 1 ? 's' : '' }}</small>
+              <small v-if="p.count < 4" class="warn"> · 4 sons minimum pour jouer</small>
+            </button>
+            <button class="ghost" :disabled="i === 0" aria-label="Monter" @click="movePlaylist(p, 'up')">↑</button>
+            <button class="ghost" :disabled="i === playlists.length - 1" aria-label="Descendre" @click="movePlaylist(p, 'down')">↓</button>
+            <button class="ghost" @click="startRename(p)">✏️ Renommer</button>
+            <button class="danger" @click="deletePlaylist(p)">🗑️</button>
+          </template>
+        </div>
+        <form class="search" @submit.prevent="createPlaylist">
+          <input v-model="newPlaylist" placeholder="Nouvelle playlist (ex. Séries TV)" maxlength="80" required />
+          <button type="submit">➕ Créer</button>
+        </form>
+      </section>
+
+      <!-- 🎵 Sons de la playlist ouverte -->
+      <section v-if="current">
+        <hr />
+        <h2>🎵 {{ current.name }}</h2>
+
+        <h3>➕ Ajouter un son</h3>
         <form class="search" @submit.prevent="search">
-          <input v-model="query" placeholder="Rechercher sur Deezer (ex. Goldorak générique)" required />
+          <input v-model="query" placeholder="Rechercher sur Deezer (ex. Friends générique)" required />
           <button type="submit" :disabled="searching">{{ searching ? '⏳' : '🔍 Chercher' }}</button>
         </form>
 
         <div v-if="results.length" class="results">
-          <div
-            v-for="t in results"
-            :key="t.id"
-            :class="['result', { selected: picked && picked.id === t.id }]"
-          >
+          <div v-for="t in results" :key="t.id" :class="['result', { selected: picked && picked.id === t.id }]">
             <img :src="t.cover" alt="" />
             <div class="meta">
               <strong>{{ t.title }}</strong>
@@ -34,24 +62,41 @@
           </div>
         </div>
 
-        <form v-if="picked" class="form add" @submit.prevent="addCartoon">
+        <form v-if="picked" class="form add" @submit.prevent="addTrack">
           <p>Titre choisi : <strong>{{ picked.title }}</strong> ({{ picked.artist }})</p>
-          <input v-model="draft.name" placeholder="Nom du dessin animé (réponse affichée)" required maxlength="80" />
-          <select v-model="draft.era" required>
-            <option value="80">Années 70-80</option>
-            <option value="2000">Années 90-2000</option>
-          </select>
-          <input v-model="draft.image" placeholder="Lien d'image (facultatif, sinon pochette Deezer)" />
-          <button type="submit">💾 Ajouter au quiz</button>
+          <input v-model="draft.name" placeholder="Réponse affichée (ex. Friends)" required maxlength="80" />
+          <input v-model="draft.image" placeholder="Lien d'image https (facultatif, sinon pochette Deezer)" />
+          <button type="submit">💾 Ajouter à {{ current.name }}</button>
         </form>
-        <p v-if="message" class="hint">{{ message }}</p>
 
-        <h3>Génériques ajoutés ici</h3>
-        <p v-if="custom.length === 0" class="hint">Aucun pour l'instant.</p>
-        <div v-for="c in custom" :key="c.id" class="question">
-          <strong>{{ c.name }}</strong>
-          <small>{{ c.era === '80' ? 'Années 70-80' : 'Années 90-2000' }} · Deezer {{ c.deezer_id }}</small>
-          <button @click="deleteCartoon(c.id)">🗑️ Retirer</button>
+        <h3>Sons ({{ tracks.length }})</h3>
+        <p v-if="loadingTracks" class="hint">⏳ Chargement…</p>
+        <p v-else-if="tracks.length === 0" class="hint">Aucun son pour l'instant.</p>
+        <div v-for="t in tracks" :key="t.id" class="track">
+          <img v-if="t.image_url" :src="t.image_url" alt="" class="thumb" />
+          <span v-else class="thumb">🎬</span>
+
+          <div v-if="editing === t.id" class="meta grow">
+            <input v-model="editDraft.name" maxlength="80" placeholder="Nom" />
+            <input v-model="editDraft.image" placeholder="Lien d'image https (vide = pochette Deezer)" />
+            <select v-model.number="editDraft.playlistId" aria-label="Playlist">
+              <option v-for="p in playlists" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </select>
+            <div class="row">
+              <button @click="saveTrack(t)">💾 Enregistrer</button>
+              <button class="ghost" @click="editing = null">Annuler</button>
+            </div>
+          </div>
+          <div v-else class="meta grow">
+            <strong>{{ t.name }}</strong>
+            <small v-if="!t.available" class="warn">Extrait indisponible sur Deezer : ce son n'est pas joué</small>
+            <audio v-if="t.audio_url" :src="t.audio_url" controls preload="none"></audio>
+          </div>
+
+          <div v-if="editing !== t.id" class="row">
+            <button class="ghost" @click="startEdit(t)">✏️</button>
+            <button class="danger" @click="deleteTrack(t)">🗑️ Retirer</button>
+          </div>
         </div>
       </section>
 
@@ -63,23 +108,8 @@
         <div v-if="scores.length === 0">Aucun score pour l'instant.</div>
         <div v-for="s in scores" :key="s.id" class="question">
           <strong>{{ s.pseudo }}</strong> : {{ s.score }} pts
-          <small>({{ new Date(s.created_at).toLocaleString('fr-FR') }})</small>
-          <button @click="deleteScore(s.id)">🗑️ Supprimer</button>
-        </div>
-      </section>
-
-      <hr />
-
-      <!-- 🎬 Dessins animés -->
-      <section>
-        <h2>🎬 Tous les dessins animés du quiz ({{ cartoons.length }})</h2>
-        <p class="hint">La liste de base se modifie dans <code>api/_lib/cartoons.js</code>.</p>
-        <div class="grid">
-          <div v-for="cartoon in cartoons" :key="cartoon.name" class="block">
-            <img v-if="cartoon.image_url" :src="cartoon.image_url" alt="" class="vignette" />
-            <div v-else class="vignette">🎬</div>
-            <p>{{ cartoon.name }}</p>
-          </div>
+          <small>({{ playlistName(s.mode) }}, {{ new Date(s.created_at).toLocaleString('fr-FR') }})</small>
+          <button class="danger" @click="deleteScore(s.id)">🗑️ Supprimer</button>
         </div>
       </section>
     </template>
@@ -95,15 +125,22 @@ export default {
       authed: false,
       password: '',
       error: '',
+      message: '',
       scores: [],
-      cartoons: [],
-      custom: [],
+      playlists: [],
+      current: null,
+      tracks: [],
+      loadingTracks: false,
+      newPlaylist: '',
+      renaming: null,
+      renameDraft: '',
       query: '',
       searching: false,
       results: [],
       picked: null,
-      draft: { name: '', era: '80', image: '' },
-      message: ''
+      draft: { name: '', image: '' },
+      editing: null,
+      editDraft: { name: '', image: '', playlistId: null }
     };
   },
   async mounted() {
@@ -123,77 +160,166 @@ export default {
       if (json) h['Content-Type'] = 'application/json';
       return h;
     },
+    async api(path, { method = 'GET', body } = {}) {
+      const res = await fetch(path, {
+        method,
+        headers: this.headers(body !== undefined),
+        body: body !== undefined ? JSON.stringify(body) : undefined
+      });
+      const data = res.status === 204 ? null : await res.json().catch(() => null);
+      if (!res.ok) throw new Error((data && data.error) || 'Erreur ' + res.status);
+      return data;
+    },
+    flash(text) {
+      this.message = text;
+      clearTimeout(this.flashTimer);
+      this.flashTimer = setTimeout(() => (this.message = ''), 4000);
+    },
+    async run(fn) {
+      try {
+        await fn();
+      } catch (e) {
+        this.flash('❌ ' + e.message);
+      }
+    },
     async login() {
       this.error = '';
-      const res = await fetch('/api/admin/scores', { headers: this.headers() });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        this.error = body.error || 'Erreur ' + res.status;
+      try {
+        this.scores = await this.api('/api/admin/scores');
+      } catch (e) {
+        this.error = e.message;
         this.authed = false;
         return;
       }
-      this.scores = await res.json();
       this.authed = true;
       try {
         sessionStorage.setItem(KEY, this.password);
       } catch {
         /* ignore */
       }
-      await Promise.all([this.fetchCartoons(), this.fetchCustom()]);
+      await this.fetchPlaylists();
+      if (this.playlists.length) await this.openPlaylist(this.playlists[0]);
     },
-    async fetchCartoons() {
-      const c = await fetch('/api/cartoons?t=' + Date.now());
-      if (c.ok) this.cartoons = await c.json();
+    playlistName(slug) {
+      if (slug === 'all') return 'Tout mélanger';
+      const p = this.playlists.find((x) => x.slug === slug);
+      return p ? p.name : slug;
     },
-    async fetchCustom() {
-      const res = await fetch('/api/admin/cartoons', { headers: this.headers() });
-      if (res.ok) this.custom = await res.json();
+    async fetchPlaylists() {
+      this.playlists = await this.api('/api/admin/playlists');
+      if (this.current) this.current = this.playlists.find((p) => p.id === this.current.id) || null;
     },
-    async fetchScores() {
-      const res = await fetch('/api/admin/scores', { headers: this.headers() });
-      if (res.ok) this.scores = await res.json();
-    },
-    async deleteScore(id) {
-      await fetch(`/api/admin/scores?id=${id}`, { method: 'DELETE', headers: this.headers() });
-      await this.fetchScores();
-    },
-    async search() {
-      this.searching = true;
-      this.message = '';
+    async fetchTracks() {
+      if (!this.current) return;
+      this.loadingTracks = true;
       try {
-        const res = await fetch('/api/admin/cartoons?q=' + encodeURIComponent(this.query), {
-          headers: this.headers()
-        });
-        this.results = res.ok ? await res.json() : [];
-        if (!this.results.length) this.message = 'Aucun extrait trouvé.';
+        this.tracks = await this.api('/api/admin/playlists?id=' + this.current.id);
       } finally {
-        this.searching = false;
+        this.loadingTracks = false;
       }
+    },
+    async openPlaylist(p) {
+      this.current = p;
+      this.results = [];
+      this.picked = null;
+      this.editing = null;
+      await this.run(() => this.fetchTracks());
+    },
+    createPlaylist() {
+      return this.run(async () => {
+        const name = this.newPlaylist.trim();
+        const { id } = await this.api('/api/admin/playlists', { method: 'POST', body: { name } });
+        this.newPlaylist = '';
+        await this.fetchPlaylists();
+        const created = this.playlists.find((p) => p.id === id);
+        if (created) await this.openPlaylist(created);
+        this.flash(`✅ Playlist « ${name} » créée. Ajoute au moins 4 sons pour qu'elle soit jouable.`);
+      });
+    },
+    startRename(p) {
+      this.renaming = p.id;
+      this.renameDraft = p.name;
+    },
+    renamePlaylist(p) {
+      return this.run(async () => {
+        await this.api('/api/admin/playlists?id=' + p.id, { method: 'PATCH', body: { name: this.renameDraft } });
+        this.renaming = null;
+        await this.fetchPlaylists();
+      });
+    },
+    movePlaylist(p, move) {
+      return this.run(async () => {
+        await this.api('/api/admin/playlists?id=' + p.id, { method: 'PATCH', body: { move } });
+        await this.fetchPlaylists();
+      });
+    },
+    deletePlaylist(p) {
+      if (!window.confirm(`Supprimer la playlist « ${p.name} » et ses ${p.count} sons ?`)) return;
+      return this.run(async () => {
+        await this.api('/api/admin/playlists?id=' + p.id, { method: 'DELETE' });
+        if (this.current && this.current.id === p.id) {
+          this.current = null;
+          this.tracks = [];
+        }
+        await this.fetchPlaylists();
+        this.flash(`🗑️ Playlist « ${p.name} » supprimée.`);
+      });
+    },
+    search() {
+      return this.run(async () => {
+        this.searching = true;
+        try {
+          this.results = await this.api('/api/admin/tracks?q=' + encodeURIComponent(this.query));
+          if (!this.results.length) this.flash('Aucun extrait trouvé.');
+        } finally {
+          this.searching = false;
+        }
+      });
     },
     pick(t) {
       this.picked = t;
-      this.draft = { name: '', era: '80', image: '' };
+      this.draft = { name: '', image: '' };
     },
-    async addCartoon() {
-      const res = await fetch('/api/admin/cartoons', {
-        method: 'POST',
-        headers: this.headers(true),
-        body: JSON.stringify({ ...this.draft, deezerId: this.picked.id })
+    addTrack() {
+      return this.run(async () => {
+        await this.api('/api/admin/tracks', {
+          method: 'POST',
+          body: { ...this.draft, deezerId: this.picked.id, playlistId: this.current.id }
+        });
+        this.flash(`✅ ${this.draft.name} ajouté à ${this.current.name}.`);
+        this.picked = null;
+        this.results = [];
+        this.query = '';
+        await Promise.all([this.fetchTracks(), this.fetchPlaylists()]);
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        this.message = '❌ ' + (body.error || 'Erreur ' + res.status);
-        return;
-      }
-      this.message = `✅ ${this.draft.name} ajouté au quiz.`;
-      this.picked = null;
-      this.results = [];
-      this.query = '';
-      await Promise.all([this.fetchCustom(), this.fetchCartoons()]);
     },
-    async deleteCartoon(id) {
-      await fetch(`/api/admin/cartoons?id=${id}`, { method: 'DELETE', headers: this.headers() });
-      await Promise.all([this.fetchCustom(), this.fetchCartoons()]);
+    startEdit(t) {
+      this.editing = t.id;
+      this.editDraft = { name: t.name, image: t.image || '', playlistId: this.current.id };
+    },
+    saveTrack(t) {
+      return this.run(async () => {
+        const body = { name: this.editDraft.name };
+        if (this.editDraft.image.trim() !== (t.image || '')) body.image = this.editDraft.image.trim();
+        if (this.editDraft.playlistId !== this.current.id) body.playlistId = this.editDraft.playlistId;
+        await this.api('/api/admin/tracks?id=' + t.id, { method: 'PATCH', body });
+        this.editing = null;
+        await Promise.all([this.fetchTracks(), this.fetchPlaylists()]);
+      });
+    },
+    deleteTrack(t) {
+      if (!window.confirm(`Retirer « ${t.name} » de ${this.current.name} ?`)) return;
+      return this.run(async () => {
+        await this.api('/api/admin/tracks?id=' + t.id, { method: 'DELETE' });
+        await Promise.all([this.fetchTracks(), this.fetchPlaylists()]);
+        this.flash(`🗑️ ${t.name} retiré.`);
+      });
+    },
+    deleteScore(id) {
+      return this.run(async () => {
+        await this.api(`/api/admin/scores?id=${id}`, { method: 'DELETE' });
+        this.scores = await this.api('/api/admin/scores');
+      });
     }
   }
 };
@@ -311,5 +437,85 @@ button:hover {
   .result button {
     grid-column: 1 / -1;
   }
+}
+.selected {
+  border-color: #4e54c8;
+  box-shadow: 0 0 0 2px rgba(78, 84, 200, 0.3);
+}
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+.row {
+  display: flex;
+  gap: 0.5em;
+  flex-wrap: wrap;
+}
+.track {
+  display: flex;
+  gap: 0.75em;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 0.6em;
+  margin-bottom: 0.6em;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+}
+.track .meta input,
+.track .meta select {
+  padding: 0.5em;
+  margin: 0.2em 0;
+  font-size: 1em;
+}
+.thumb {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border-radius: 6px;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6em;
+  background: #eef;
+}
+button.link {
+  background: none;
+  color: inherit;
+  text-align: left;
+  padding: 0;
+}
+button.link:hover {
+  background: none;
+  text-decoration: underline;
+}
+button.ghost {
+  background: #eef;
+  color: #333;
+}
+button.ghost:hover {
+  background: #dde;
+}
+button.danger {
+  background: #c0392b;
+}
+button.danger:hover {
+  background: #e05545;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.warn {
+  color: #b9770e;
+}
+.flash {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f4f4ff;
+  padding: 0.6em 1em;
+  border-radius: 6px;
 }
 </style>
