@@ -1,194 +1,345 @@
 <template>
-
   <div class="app">
     <h1>🎬 Blind Test Dessins Animés</h1>
 
     <!-- Écran d’accueil -->
     <div v-if="!started">
+      <div v-if="challenge" class="challenge-banner">
+        ⚔️ <strong>{{ challenge.by || 'Un ami' }}</strong> te défie
+        <span v-if="challenge.score !== null"> : <strong>{{ challenge.score }} pts</strong> à battre</span>
+      </div>
+
       <p class="intro-text">Es-tu prêt pour le quiz ?</p>
-      <button @click="startQuiz" :disabled="loading">
+
+      <div v-if="!challenge" class="modes" role="radiogroup" aria-label="Époque">
+        <button
+          v-for="m in modes"
+          :key="m.id"
+          type="button"
+          role="radio"
+          :aria-checked="mode === m.id"
+          :class="['mode', { active: mode === m.id }]"
+          @click="mode = m.id"
+        >
+          {{ m.label }}
+        </button>
+      </div>
+      <p v-else class="hint">Mode : {{ modeLabel }}</p>
+
+      <p class="rules">⏱️ {{ QUESTION_TIME }} s par question. Bonne réponse : 100 pts, plus jusqu'à 100 pts de bonus si tu es rapide.</p>
+
+      <button class="primary" @click="startQuiz" :disabled="loading">
         {{ loading ? '⏳ Chargement...' : '✅ Prêt' }}
       </button>
+      <p v-if="error" class="error">{{ error }}</p>
+
+      <Leaderboard :refresh-key="leaderboardKey" />
     </div>
 
     <!-- Quiz en cours -->
     <div v-else-if="currentIndex < questions.length">
-      <h3>Question {{ currentIndex + 1 }} / {{ questions.length }}</h3>
-      <audio :src="questions[currentIndex].audio_url" controls autoplay></audio>
-
-      <div class="choices">
-        <div v-for="choice in JSON.parse(questions[currentIndex].choices)" :key="choice" class="choice-block"
-          @click="handleAnswer(choice)">
-          <!-- 🖼️ Vignette -->
-          <img v-if="getCartoonImage(choice)" :src="getCartoonImage(choice)" alt="" class="vignette" />
-          <div v-else class="vignette vignette-vide">🎬</div>
-          <!-- 📝 Nom du cartoon -->
-          <p>{{ choice }}</p>
-        </div>
+      <div class="status">
+        <span>Question {{ currentIndex + 1 }} / {{ questions.length }}</span>
+        <span class="points">{{ score }} pts</span>
       </div>
 
+      <div class="timer" :class="{ urgent: timeLeft <= 5 }" aria-hidden="true">
+        <div class="timer-bar" :style="{ width: (timeLeft / QUESTION_TIME) * 100 + '%' }"></div>
+      </div>
+      <p class="timer-text">{{ Math.ceil(timeLeft) }} s</p>
 
-      <p v-if="feedbackMessage" class="feedback">{{ feedbackMessage }}</p>
+      <audio ref="audio" :src="current.audio_url" controls autoplay></audio>
+
+      <div class="choices">
+        <button
+          v-for="choice in currentChoices"
+          :key="choice"
+          type="button"
+          :class="['choice-block', choiceClass(choice)]"
+          :disabled="answered"
+          @click="handleAnswer(choice)"
+        >
+          <img v-if="getCartoonImage(choice)" :src="getCartoonImage(choice)" alt="" class="vignette" />
+          <span v-else class="vignette vignette-vide">🎬</span>
+          <span class="choice-name">{{ choice }}</span>
+        </button>
+      </div>
+
+      <p v-if="feedbackMessage" class="feedback" aria-live="polite">{{ feedbackMessage }}</p>
     </div>
 
     <!-- Fin du quiz -->
     <div v-else>
       <h2>🎉 Quiz terminé !</h2>
-      <p>Tu as obtenu {{ score }} / {{ questions.length }}</p>
-      <input v-model="pseudo" placeholder="Ton pseudo" />
-      <button @click="submitScore" :disabled="scoreSubmitted">📤 Envoyer le score</button>
-      <button @click="restartQuiz">🔁 Rejouer</button>
+      <p class="final-score">{{ score }} pts</p>
+      <p>{{ correctCount }} bonne{{ correctCount > 1 ? 's' : '' }} réponse{{ correctCount > 1 ? 's' : '' }} sur {{ questions.length }}</p>
+      <p v-if="challenge && challenge.score !== null" class="challenge-result">
+        {{ score > challenge.score ? '🏆 Défi relevé !' : score === challenge.score ? '🤝 Égalité !' : '😅 Défi perdu, retente ta chance !' }}
+      </p>
 
-      <div v-if="showLeaderboard" style="margin-top: 2em;">
-        <Leaderboard />
+      <div class="end-actions">
+        <input v-model="pseudo" placeholder="Ton pseudo" maxlength="30" :disabled="scoreSubmitted" />
+        <button @click="submitScore" :disabled="scoreSubmitted">📤 Envoyer le score</button>
+        <button @click="shareChallenge">🔗 Défier un ami</button>
+        <button @click="restartQuiz">🔁 Rejouer</button>
       </div>
+      <p v-if="shareMessage" class="hint">{{ shareMessage }}</p>
+      <input v-if="shareUrl" class="share-url" :value="shareUrl" readonly @focus="$event.target.select()" />
+
+      <!-- Correction -->
+      <section class="correction">
+        <h3>📝 Correction</h3>
+        <ol>
+          <li v-for="(q, i) in questions" :key="q.id" :class="results[i]?.correct ? 'ok' : 'ko'">
+            <img v-if="getCartoonImage(q.correct_answer)" :src="getCartoonImage(q.correct_answer)" alt="" />
+            <span v-else class="mini-vide">🎬</span>
+            <div>
+              <strong>{{ q.correct_answer }}</strong>
+              <small v-if="results[i]?.correct"> ✅ +{{ results[i].points }} pts</small>
+              <small v-else-if="results[i]?.choice"> ❌ tu as répondu {{ results[i].choice }}</small>
+              <small v-else> ⏱️ temps écoulé</small>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <Leaderboard :refresh-key="leaderboardKey" />
 
       <transition name="fade">
-        <div v-if="showSnackbar" class="snackbar">
-          ✅ Score envoyé ! Tu as obtenu {{ score }} / {{ questions.length }}
-        </div>
+        <div v-if="showSnackbar" class="snackbar">✅ Score envoyé : {{ score }} pts</div>
       </transition>
     </div>
   </div>
 </template>
 
 <script>
+import confetti from 'canvas-confetti';
 import '../assets/QuizStyles.css';
 import Leaderboard from './Leaderboard.vue';
 
+const QUESTION_TIME = 20;
+const MODES = [
+  { id: 'all', label: 'Toutes les époques' },
+  { id: '80', label: 'Années 70-80' },
+  { id: '2000', label: 'Années 90-2000' }
+];
+
+function readStorage(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function writeStorage(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* stockage indisponible */
+  }
+}
+
 export default {
-  components: {
-    Leaderboard
-  },
+  components: { Leaderboard },
   data() {
     return {
+      QUESTION_TIME,
+      modes: MODES,
+      mode: 'all',
+      seed: null,
+      challenge: null,
       started: false,
       loading: false,
+      error: '',
       questions: [],
+      cartoons: [],
       currentIndex: 0,
-      answers: [],
+      results: [],
+      answered: false,
+      timeLeft: QUESTION_TIME,
+      timerId: null,
+      questionStart: 0,
       pseudo: '',
       score: 0,
-      showLeaderboard: false,
       scoreSubmitted: false,
-      animationClass: '',
       feedbackMessage: '',
       showSnackbar: false,
-      cartoons: []
+      shareUrl: '',
+      shareMessage: '',
+      leaderboardKey: 0
     };
   },
   computed: {
-    parsedChoices() {
-      const q = this.questions[this.currentIndex];
-      return q ? JSON.parse(q.choices) : [];
+    current() {
+      return this.questions[this.currentIndex];
+    },
+    currentChoices() {
+      return this.current ? JSON.parse(this.current.choices) : [];
+    },
+    correctCount() {
+      return this.results.filter((r) => r && r.correct).length;
+    },
+    modeLabel() {
+      return (MODES.find((m) => m.id === this.mode) || MODES[0]).label;
     }
   },
   mounted() {
-    const savedPseudo = localStorage.getItem('pseudo');
-    if (savedPseudo) this.pseudo = savedPseudo;
+    this.pseudo = readStorage('pseudo') || '';
+    const p = new URLSearchParams(window.location.search);
+    const seed = Number.parseInt(p.get('defi'), 10);
+    if (Number.isFinite(seed)) {
+      const score = Number.parseInt(p.get('score'), 10);
+      this.challenge = {
+        seed,
+        by: (p.get('par') || '').slice(0, 30),
+        score: Number.isFinite(score) ? score : null
+      };
+      if (MODES.some((m) => m.id === p.get('mode'))) this.mode = p.get('mode');
+    }
+  },
+  beforeUnmount() {
+    this.stopTimer();
   },
   methods: {
     async startQuiz() {
       this.loading = true;
+      this.error = '';
+      this.seed = this.challenge ? this.challenge.seed : Math.floor(Math.random() * 1e9);
       try {
         const [questionsRes, cartoonsRes] = await Promise.all([
-          fetch('/api/questions'),
+          fetch(`/api/questions?mode=${this.mode}&seed=${this.seed}`),
           fetch('/api/cartoons')
         ]);
-
         if (!questionsRes.ok || !cartoonsRes.ok) throw new Error('API indisponible');
         this.questions = await questionsRes.json();
         this.cartoons = await cartoonsRes.json();
-
-        this.answers = Array(this.questions.length).fill('');
-        this.started = true;
+        this.results = [];
         this.score = 0;
         this.currentIndex = 0;
-      } catch (error) {
-        console.error('Erreur chargement quiz :', error);
-        alert('❌ Impossible de charger les données.');
+        this.scoreSubmitted = false;
+        this.shareUrl = '';
+        this.shareMessage = '';
+        this.started = true;
+        this.startQuestion();
+      } catch (e) {
+        console.error('Erreur chargement quiz :', e);
+        this.error = '❌ Impossible de charger le quiz, réessaie dans un instant.';
       } finally {
         this.loading = false;
       }
     },
+    startQuestion() {
+      this.stopTimer();
+      this.answered = false;
+      this.feedbackMessage = '';
+      this.timeLeft = QUESTION_TIME;
+      this.questionStart = performance.now();
+      this.timerId = setInterval(() => {
+        const elapsed = (performance.now() - this.questionStart) / 1000;
+        this.timeLeft = Math.max(0, QUESTION_TIME - elapsed);
+        if (this.timeLeft <= 0) this.handleAnswer(null);
+      }, 100);
+    },
+    stopTimer() {
+      if (this.timerId) clearInterval(this.timerId);
+      this.timerId = null;
+    },
     getCartoonImage(name) {
-      const cartoon = this.cartoons.find(c => c.name === name);
+      const cartoon = this.cartoons.find((c) => c.name === name);
       return cartoon ? cartoon.image_url : '';
     },
+    choiceClass(choice) {
+      if (!this.answered) return '';
+      if (choice === this.current.correct_answer) return 'correct';
+      if (choice === this.results[this.currentIndex]?.choice) return 'wrong';
+      return 'faded';
+    },
     handleAnswer(choice) {
-      const currentQuestion = this.questions[this.currentIndex];
-      this.answers[this.currentIndex] = choice;
-      const isCorrect = choice === currentQuestion.correct_answer;
+      if (this.answered) return;
+      this.answered = true;
+      this.stopTimer();
+      if (this.$refs.audio) this.$refs.audio.pause();
+
+      const isCorrect = choice === this.current.correct_answer;
+      const points = isCorrect ? 100 + Math.round((100 * this.timeLeft) / QUESTION_TIME) : 0;
+      this.results[this.currentIndex] = { choice, correct: isCorrect, points };
+      this.score += points;
 
       if (isCorrect) {
-        this.score++;
-        this.animationClass = 'correct';
-        this.feedbackMessage = '✅ Bravo !';
-        this.launchConfetti();
+        this.feedbackMessage = `✅ Bravo ! +${points} pts`;
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+      } else if (choice === null) {
+        this.feedbackMessage = `⏱️ Trop tard ! C'était ${this.current.correct_answer}`;
       } else {
-        this.animationClass = 'wrong';
-        this.feedbackMessage = '❌ Oups…';
+        this.feedbackMessage = `❌ Oups… C'était ${this.current.correct_answer}`;
       }
 
       setTimeout(() => {
-        this.animationClass = '';
-        this.feedbackMessage = '';
         this.currentIndex++;
-      }, 1000);
-    }
-    ,
+        if (this.currentIndex < this.questions.length) this.startQuestion();
+        else this.feedbackMessage = '';
+      }, 1500);
+    },
     async submitScore() {
       if (this.scoreSubmitted) return;
-
       if (!this.pseudo.trim()) {
-        alert('❗️Veuillez entrer un pseudo avant d’envoyer le score.');
+        this.shareMessage = '❗️ Entre un pseudo avant d’envoyer le score.';
         return;
       }
-
-      if (!Number.isInteger(this.score) || this.score < 0 || this.score > this.questions.length) {
-        alert('❌ Score invalide.');
-        return;
-      }
-
       try {
         const res = await fetch('/api/scores', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pseudo: this.pseudo, score: this.score })
+          body: JSON.stringify({
+            pseudo: this.pseudo.trim(),
+            score: this.score,
+            correct: this.correctCount,
+            mode: this.mode
+          })
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
-
-        this.showLeaderboard = true;
         this.scoreSubmitted = true;
-        localStorage.setItem('pseudo', this.pseudo);
+        this.shareMessage = '';
+        writeStorage('pseudo', this.pseudo.trim());
+        this.leaderboardKey++;
         this.showSnackbar = true;
         setTimeout(() => (this.showSnackbar = false), 3000);
       } catch (error) {
         console.error('Erreur envoi score :', error);
-        alert('❌ Échec de l’envoi du score.');
+        this.shareMessage = '❌ Échec de l’envoi du score.';
       }
     },
-    launchConfetti() {
-      if (window.confetti) {
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 }
-        });
+    async shareChallenge() {
+      const url = new URL(window.location.origin + '/');
+      url.searchParams.set('defi', String(this.seed));
+      url.searchParams.set('mode', this.mode);
+      url.searchParams.set('score', String(this.score));
+      if (this.pseudo.trim()) url.searchParams.set('par', this.pseudo.trim());
+      this.shareUrl = url.toString();
+      try {
+        await navigator.clipboard.writeText(this.shareUrl);
+        this.shareMessage = '📋 Lien copié ! Ton ami jouera exactement les mêmes questions.';
+      } catch {
+        this.shareMessage = 'Copie ce lien et envoie-le : ton ami jouera les mêmes questions.';
       }
     },
     restartQuiz() {
+      this.stopTimer();
       this.started = false;
-      this.loading = false;
       this.questions = [];
+      this.results = [];
       this.currentIndex = 0;
-      this.answers = [];
       this.score = 0;
       this.feedbackMessage = '';
-      this.animationClass = '';
-      this.showLeaderboard = false;
       this.scoreSubmitted = false;
       this.showSnackbar = false;
+      this.shareUrl = '';
+      this.shareMessage = '';
+      if (this.challenge) {
+        // Après un défi, on revient au jeu normal.
+        this.challenge = null;
+        window.history.replaceState(null, '', '/');
+      }
     }
   }
 };

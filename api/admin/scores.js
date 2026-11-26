@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   await ensureTable()
 
   if (req.method === 'GET') {
-    const rows = await sql`SELECT id, pseudo, score, created_at FROM scores ORDER BY created_at DESC LIMIT 100`
+    const rows = await sql`SELECT id, pseudo, score, correct, mode, created_at FROM scores ORDER BY created_at DESC LIMIT 100`
     res.setHeader('Cache-Control', 'no-store')
     return res.status(200).json(rows)
   }
