@@ -29,7 +29,8 @@
         <p class="hint">La liste se modifie dans <code>api/_lib/cartoons.js</code> (identifiants Deezer).</p>
         <div class="grid">
           <div v-for="cartoon in cartoons" :key="cartoon.name" class="block">
-            <img :src="cartoon.image_url" alt="" class="vignette" />
+            <img v-if="cartoon.image_url" :src="cartoon.image_url" alt="" class="vignette" />
+            <div v-else class="vignette">🎬</div>
             <p>{{ cartoon.name }}</p>
           </div>
         </div>
