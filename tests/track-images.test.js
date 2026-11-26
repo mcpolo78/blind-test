@@ -5,11 +5,12 @@ import { defaultImage } from '../api/_lib/track-images.js'
 const currentImage = 'https://example.com/current.jpg'
 const legacyImage = 'https://example.com/legacy.jpg'
 const customImage = 'https://example.com/custom.jpg'
-const seedTracks = [{ name: 'Générique', deezerId: 42, image: currentImage, legacyImage }]
+const previousImage = 'https://example.com/previous.jpg'
+const seedTracks = [{ name: 'Générique', deezerId: 42, image: currentImage, legacyImage, legacyImages: [previousImage] }]
 const track = { name: 'Générique', deezerId: 42 }
 
 test('les images absentes et anciennes utilisent la vignette corrigée', () => {
-  for (const image of [undefined, null, '', legacyImage]) {
+  for (const image of [undefined, null, '', legacyImage, previousImage]) {
     assert.equal(defaultImage({ ...track, image }, seedTracks), currentImage)
   }
   assert.equal(defaultImage({ ...track, image: currentImage }, seedTracks), currentImage)

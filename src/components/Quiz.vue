@@ -1,5 +1,5 @@
 <template>
-  <div class="app">
+  <div class="app" :class="{ 'is-playing': started && currentIndex < questions.length }">
     <h1>🎵 Blind test</h1>
 
     <!-- Écran d’accueil -->
@@ -28,8 +28,8 @@
 
       <p class="rules">⏱️ {{ QUESTION_TIME }} s par question. Bonne réponse : 100 pts, plus jusqu'à 100 pts de bonus si tu es rapide.</p>
 
-      <button class="primary" @click="startQuiz" :disabled="loading">
-        {{ loading ? '⏳ Chargement...' : '✅ Prêt' }}
+      <button class="primary" @click="startQuiz" :disabled="loading || playlistsLoading || (!challenge && !mode)">
+        {{ loading || playlistsLoading ? '⏳ Chargement...' : '✅ Prêt' }}
       </button>
       <p v-if="error" class="error">{{ error }}</p>
 
@@ -140,8 +140,9 @@ export default {
   data() {
     return {
       QUESTION_TIME,
-      modes: [ALL],
-      mode: 'all',
+      modes: [],
+      mode: '80',
+      playlistsLoading: true,
       seed: null,
       challenge: null,
       started: false,
@@ -175,7 +176,11 @@ export default {
       return this.results.filter((r) => r && r.correct).length;
     },
     modeLabel() {
-      return (this.modes.find((m) => m.id === this.mode) || ALL).label;
+      if (this.mode === ALL.id) return ALL.label;
+      return this.modes.find((m) => m.id === this.mode)?.label || 'Playlist du défi';
+    },
+    defaultMode() {
+      return this.modes.find((m) => m.id === '80')?.id || this.modes[0]?.id || '';
     }
   },
   mounted() {
@@ -190,7 +195,7 @@ export default {
         score: Number.isFinite(score) ? score : null
       };
       const mode = p.get('mode');
-      if (mode && /^[a-z0-9-]{1,60}$/.test(mode)) this.mode = mode;
+      this.mode = mode && /^[a-z0-9-]{1,60}$/.test(mode) ? mode : ALL.id;
     }
     this.loadPlaylists();
   },
@@ -199,17 +204,27 @@ export default {
   },
   methods: {
     async loadPlaylists() {
+      this.playlistsLoading = true;
       try {
         const res = await fetch('/api/playlists');
-        if (!res.ok) return;
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         const list = await res.json();
-        this.modes = [ALL, ...list.map((p) => ({ id: p.slug, label: p.name }))];
-        if (!this.challenge && !this.modes.some((m) => m.id === this.mode)) this.mode = 'all';
+        this.modes = list.map((p) => ({ id: p.slug, label: p.name }));
+        if (!this.challenge && !this.modes.some((m) => m.id === this.mode)) this.mode = this.defaultMode;
+        if (!this.challenge && !this.mode) this.error = 'Aucune playlist disponible pour le moment.';
       } catch {
-        /* on garde « Tout mélanger » */
+        if (!this.challenge) {
+          this.mode = '';
+          this.error = '❌ Impossible de charger les playlists, actualise la page.';
+        }
+      } finally {
+        this.playlistsLoading = false;
       }
     },
     async startQuiz() {
+      if (this.loading || this.playlistsLoading) return;
+      if (!this.challenge && !this.modes.some((m) => m.id === this.mode)) this.mode = this.defaultMode;
+      if (!this.mode) return;
       this.loading = true;
       this.error = '';
       this.seed = this.challenge ? this.challenge.seed : Math.floor(Math.random() * 1e9);
@@ -346,6 +361,7 @@ export default {
       if (this.challenge) {
         // Après un défi, on revient au jeu normal.
         this.challenge = null;
+        this.mode = this.defaultMode;
         window.history.replaceState(null, '', '/');
       }
     }

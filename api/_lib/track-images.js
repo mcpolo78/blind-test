@@ -7,6 +7,8 @@ export function defaultImage(track, seedTracks = SEED_TRACKS) {
   const seed = seedTracks.find(
     (entry) => entry.name === track.name && Number(entry.deezerId) === Number(track.deezerId),
   )
-  if (seed?.image && (!image || image === seed.legacyImage)) return seed.image
+  if (seed?.image && (!image || image === seed.legacyImage || seed.legacyImages?.includes(image))) {
+    return seed.image
+  }
   return image
 }
