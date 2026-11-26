@@ -1,4 +1,4 @@
-// Vignettes servies par l'optimiseur d'images Vercel (AVIF/WebP, 256 px, en cache),
+// Vignettes servies par l'optimiseur d'images Vercel (AVIF/WebP, 384 px pour rester net sur écran haute densité, en cache),
 // voir "images" dans vercel.json, où les hôtes autorisés sont listés.
 const OPTIMIZED_HOSTS = ['upload.wikimedia.org', 'cdn-images.dzcdn.net', 'e-cdns-images.dzcdn.net']
 
@@ -9,5 +9,5 @@ export function optimized(url) {
   } catch {
     return url
   }
-  return `/_vercel/image?url=${encodeURIComponent(url)}&w=256&q=75`
+  return `/_vercel/image?url=${encodeURIComponent(url)}&w=384&q=75`
 }
